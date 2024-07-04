@@ -1,37 +1,34 @@
 import "dotenv/config"
 
-import { createBot, createProvider, createFlow, addKeyword, EVENTS } from '@builderbot/bot'
+import { createBot, createProvider, createFlow } from '@builderbot/bot'
 import { MemoryDB as Database } from '@builderbot/bot'
-import { BaileysProvider as Provider } from '@builderbot/provider-baileys'
-import { toAsk, httpInject } from "@builderbot-plugins/openai-assistants"
-import { typing } from "./utils/presence"
+import { BaileysProvider} from '@builderbot/provider-baileys'
 
-const PORT = process.env?.PORT ?? 3008
-const ASSISTANT_ID = process.env?.ASSISTANT_ID ?? ''
 
-const welcomeFlow = addKeyword<Provider, Database>(EVENTS.WELCOME)
-    .addAction(async (ctx, { flowDynamic, state, provider }) => {
-        await typing(ctx, provider)
-        const response = await toAsk(ASSISTANT_ID, ctx.body, state)
-       const chunks = response.split(/\n\n+/);
-for (const chunk of chunks) {
-    await flowDynamic([{ body: chunk.trim() }]);
-}
-    })
+const PORT = process.env?.PORT ?? 3010
 
 const main = async () => {
-    const adapterFlow = createFlow([welcomeFlow])
-    const adapterProvider = createProvider(Provider)
+
+    const provider = createProvider(BaileysProvider)
+
+    const adapterFlow = createFlow([])    
     const adapterDB = new Database()
 
-    const { httpServer } = await createBot({
+    const { handleCtx, httpServer } = await createBot({
         flow: adapterFlow,
-        provider: adapterProvider,
+        provider,
         database: adapterDB,
     })
-
-    httpInject(adapterProvider.server)
+    
     httpServer(+PORT)
+
+    provider.server.post('/send-messages', handleCtx(async (bot, req, res) => {
+        const { phone, message } = req.body
+        await bot.sendMessage(phone, message, {})
+        return res.end('send')
+    }))
+
+    
 }
 
 main()
